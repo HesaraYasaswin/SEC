@@ -1,0 +1,50 @@
+plugins {
+    id "java"
+    id "application"
+    id "pmd"
+    id 'com.intershop.gradle.javacc' version '4.1.3'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.python:jython-standalone:2.7.2' // Jython as a dependency
+}
+
+application {
+    mainClass = "edu.curtin.Main" 
+}
+
+tasks.withType(JavaCompile) {
+    options.compilerArgs << "-Xlint:all,-serial"
+}
+
+pmd {
+    consoleOutput = true
+    toolVersion = "7.3.0"
+    rulesMinimumPriority = 5
+    ruleSets = []
+    ruleSetFiles = files("saed-pmd-rules.xml") // Change this to your PMD ruleset
+}
+
+tasks.named("run") {
+    environment["PATH"] = (
+        layout.projectDirectory.dir("comms").dir("bin").toString() 
+        + File.pathSeparator
+        + System.getenv("PATH")
+    )
+    standardInput = System.in 
+}
+
+// JavaCC configuration
+javacc {
+    configs {
+        inputparser {
+            inputFile = file('src/main/java/edu/curtin/InputParser.jj') 
+            packageName = 'edu.curtin'
+        }
+    }
+}
+

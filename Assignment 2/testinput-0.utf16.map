@@ -1,0 +1,79 @@
+size (10,14)
+start (0,4)
+goal (0,2) 
+
+obstacle {
+  at (1,5), (2,2), (1,1), (3,7), (4,10), (5,12), (6,11), (7,8), (8,9), (9,10), (10,10), (12,5), (13,6)
+  requires "yellow shield"
+}
+
+
+
+plugin edu.curtin.gameplugins.Teleport
+plugin edu.curtin.gameplugins.Reveal
+plugin edu.curtin.gameplugins.Prize
+
+
+
+item "yellow shield" {
+  at (0,5), (0,1), (1,2), (2,3), (3,4), (4,6), (5,7), (6,10), (7,11), (8,12), (9,13), (10,11)
+  message "TryuJhkL"
+}
+
+
+
+script !{
+# Penalty logic script to check the time between player moves and place a penalty obstacle if needed
+from java.util import Random
+from edu.curtin.api import GameAPI
+
+# Time threshold for penalty (5 seconds)
+penaltyTimeThreshold = 5000
+
+# Initialize the last move time to the current time
+lastMoveTime = System.currentTimeMillis()
+def checkForPenalty(api):
+    currentTime = System.currentTimeMillis()
+    timeSinceLastMove = currentTime - lastMoveTime
+
+    if timeSinceLastMove > penaltyTimeThreshold:
+        addPenaltyObstacle(api)
+
+    # Update lastMoveTime after each move
+    global lastMoveTime
+    lastMoveTime = currentTime
+
+def addPenaltyObstacle(api):
+    playerRow = api.getPlayer().getRow()
+    playerColumn = api.getPlayer().getColumn()
+
+    # Possible adjacent cells (up, down, left, right)
+    adjacentCells = [
+        [playerRow - 1, playerColumn],
+        [playerRow + 1, playerColumn],
+        [playerRow, playerColumn - 1],
+        [playerRow, playerColumn + 1]
+    ]
+
+    # Shuffle the adjacent cells to randomize the selection
+    random = Random()
+    for i in range(len(adjacentCells) - 1, 0, -1):
+        j = random.nextInt(i + 1)
+        adjacentCells[i], adjacentCells[j] = adjacentCells[j], adjacentCells[i]
+
+    # Place an obstacle in the first available adjacent cell
+    for cell in adjacentCells:
+        row = cell[0]
+        column = cell[1]
+
+        if api.isCellVisible(row, column) and api.getCellContents(row, column) is None:
+            penaltyObstacle = api.createObstacle()
+            api.setObstacle(penaltyObstacle, row, column)
+            print(f"Penalty obstacle placed at: ({row}, {column})")
+            break
+
+# Call the penalty check after each move
+checkForPenalty(api)
+
+}
+

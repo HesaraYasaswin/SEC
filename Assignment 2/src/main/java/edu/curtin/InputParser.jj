@@ -1,0 +1,232 @@
+PARSER_BEGIN(InputParser)
+
+package edu.curtin;
+
+import edu.curtin.game.Game;
+import edu.curtin.game.Item;
+import edu.curtin.game.Obstacle;
+import edu.curtin.scripts.ScriptManager;
+import edu.curtin.gameplugins.PluginManager;
+
+import java.io.*;
+import java.util.*;
+
+
+public class InputParser {
+
+    private Game game;
+    private String filePath; 
+    private PluginManager pluginManager;
+
+    public InputParser(String filePath, Game game) {
+        this.filePath = filePath; 
+        this.game = game; 
+        this.pluginManager = PluginManager.getInstance();
+    }
+
+    public boolean parseInput() {
+        try {
+            InputStream stream = new FileInputStream(filePath);
+            InputParser parser = new InputParser(stream);
+            InputParser.Input(game, ScriptManager.getInstance()); 
+            return true; // if parsing is successful
+        } catch (IOException e) {
+            System.err.println("Error reading input file: " + e.getMessage());
+            return false; // if there's an error
+        } catch (ParseException e) {
+            System.err.println("Error parsing input: " + e.getMessage());
+            return false; // if there's a parse error
+        }
+    }
+}
+
+PARSER_END(InputParser)
+
+SKIP : {
+    " " | "\t" | "\r" | "\n"
+}
+
+TOKEN : {
+    < SIZE: "size" >
+  | < START: "start" >
+  | < GOAL: "goal" >
+  | < ITEM: "item" >
+  | < OBSTACLE: "obstacle" >
+  | < SCRIPT: "script" >
+  | < PLUGIN: "plugin" > 
+  | < AT: "at" >
+  | < MESSAGE: "message" >
+  | < REQUIRES: "requires" >
+  | < LPAR: "(" >
+  | < RPAR: ")" >
+  | < LBRACE: "{" >
+  | < RBRACE: "}" >
+  | < COMMA: "," >
+  | < QUOTE: "\"" >
+  | < CLASS_NAME: (["a"-"z", "A"-"Z"] (["a"-"z", "A"-"Z", "0"-"9", "_"] | ".")*)+ > 
+  | < INTEGER: (["0"-"9"])+ >
+  | < STRING: "\"" (~["\""])* "\"" >  
+  | < S_START: "!{" >  // Token for '! {' as the script declaration start
+  | < COLON: ":" >
+  | < EQUAL: "=" >
+  | <COMMENT:  "#" (~["\n"])* >
+  | < LBRACKET: "[" >
+  | < RBRACKET: "]" >
+  | < MINUS: "-" >  
+  | < PLUS: "+" >  
+  | < GREATER: ">" >  
+  | < LESS: "<" >
+  | < DOT: "." >
+
+  
+
+}
+
+void Input(Game game, ScriptManager scriptManager) :
+{}
+{
+    (SizeDeclaration(game) StartDeclaration(game) GoalDeclaration(game)) 
+    (ItemDeclaration(game) | ObstacleDeclaration(game) | PluginDeclaration() | ScriptDeclaration(scriptManager))*
+}
+
+void SizeDeclaration(Game game) : { Token row, col; }
+{ 
+    <SIZE> <LPAR> row=<INTEGER> <COMMA> col=<INTEGER> <RPAR> 
+    { game.initializeGrid(Integer.parseInt(row.image), Integer.parseInt(col.image)); }
+}
+
+void StartDeclaration(Game game) : { Token row, col; }
+{ 
+    <START> <LPAR> row=<INTEGER> <COMMA> col=<INTEGER> <RPAR> 
+    { game.initializePlayer(Integer.parseInt(row.image), Integer.parseInt(col.image)); }
+}
+
+void GoalDeclaration(Game game) : { Token row, col; }
+{ 
+    <GOAL> <LPAR> row=<INTEGER> <COMMA> col=<INTEGER> <RPAR> 
+    { game.initializeGoal(Integer.parseInt(row.image), Integer.parseInt(col.image)); }
+}
+
+void ItemDeclaration(Game game) :
+{
+    Token itemName;
+}
+{
+    <ITEM> itemName=<STRING> <LBRACE> ItemDetails(game, itemName.image) <RBRACE>
+}
+
+void ItemDetails(Game game, String itemName) :
+{
+    Token msg;
+}
+{
+    <AT> PositionList(game, itemName)
+    <MESSAGE> msg=<STRING>
+    {
+
+
+        Item item = game.getItemByName(itemName); 
+        if (item != null) {
+            item.setMessage(msg.image); 
+        }
+    }
+}
+
+void PluginDeclaration() :
+{
+    Token pluginClassName;
+}
+{
+    <PLUGIN> pluginClassName=<CLASS_NAME>
+    {
+        try {
+            // Dynamically load the plugin class using reflection
+            Class<?> plugin = Class.forName(pluginClassName.image); // Use the token's image directly
+
+            // Register the plugin in the PluginManager
+            PluginManager.getInstance().registerPlugin(plugin);
+
+            
+        } catch (ClassNotFoundException e) {
+            System.err.println("Error loading plugin: " + e.getMessage());
+        }
+    }
+}
+
+void ObstacleDeclaration(Game game) :
+{}
+{
+    <OBSTACLE> <LBRACE> ObstacleDetails(game) <RBRACE>
+}
+
+void ObstacleDetails(Game game) :
+{
+    Obstacle obstacle = new Obstacle();
+}
+{
+    <AT> PositionListForObstacle(game, obstacle)
+    (<REQUIRES> ItemRequirementList(obstacle))?
+}
+
+void PositionList(Game game, String itemName) :
+{}
+{
+    Position(game, itemName) (<COMMA> Position(game, itemName))*
+}
+
+void PositionListForObstacle(Game game, Obstacle obstacle) :
+{}
+{
+    PositionForObstacle(game, obstacle) (<COMMA> PositionForObstacle(game, obstacle))*
+}
+
+void Position(Game game, String itemName) :
+{
+    Token row, col;
+}
+{
+    <LPAR> row=<INTEGER> <COMMA> col=<INTEGER> <RPAR> { game.addItem(new Item(itemName), Integer.parseInt(row.image), Integer.parseInt(col.image)); }
+}
+
+void PositionForObstacle(Game game, Obstacle obstacle) :
+{
+    Token row, col;
+}
+{
+    <LPAR> row=<INTEGER> <COMMA> col=<INTEGER> <RPAR> { game.setObstacle(obstacle, Integer.parseInt(row.image), Integer.parseInt(col.image)); }
+}
+
+void ItemRequirementList(Obstacle obstacle) :
+{
+    Token requiredItem;
+}
+{
+    requiredItem=<STRING> { obstacle.addRequiredItem(requiredItem.image); }
+    (<COMMA> requiredItem=<STRING> { obstacle.addRequiredItem(requiredItem.image); })*
+}
+
+void ScriptDeclaration(ScriptManager scriptManager) : {} {
+    <SCRIPT> <S_START> // Consume SCRIPT and S_START tokens
+    {
+        StringBuilder scriptContent = new StringBuilder(); // Initialize a StringBuilder for script content
+
+        // Loop to read script content until the closing brace
+        while (true) {
+            Token token = getNextToken(); // Get the next token
+            if (token.kind == RBRACE) {
+                break; // Exit loop if closing brace is found
+            }
+            scriptContent.append(token.image); // Append the token's image to scriptContent
+        }
+
+        
+        scriptManager.addScript(scriptContent.toString()); // Pass the script content to ScriptManager
+        
+    }
+    
+}
+
+
+
+
+
